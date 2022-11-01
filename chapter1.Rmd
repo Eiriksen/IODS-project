@@ -1,7 +1,19 @@
-
 # About the project
 
-*Write a short description about the course and add a link to your GitHub repository here. This is an R Markdown (.Rmd) file so you should use R Markdown syntax.*
+This is my (Hi, I'm Eirik) project page for course work related to the *PHD-302 Introduction to Open Data Science* course hosted at University of Helsinki, autumn 2022.
+
+### Assignment 1 tasks:
+
+Link for the GitHub repository: [github.com/Eiriksen/IODS-project](https://github.com/Eiriksen/IODS-project)
+
+#### Thoughts about this course right now 
+Found out about it from the doctoral school's mailing lists, and signed up because I need the study credits and I hoped to learn more about general open data science concepts, especially data collaboration and using git. R I am already very familiar with so not expected to learn much new here on the technical side, but hoping to get some perspectives on how to use it in collaborative projects (where other's have to read your code). 
+
+#### Thougts about Ch 4-5 of *[R for Health Data Science](https://argoshare.is.ed.ac.uk/healthyr_book/)* and the following exercises: 
+I mostly skimmed through these chapters and the exercies; I've already spent more hours than I dare to admit coding in R using tidyverse, dplyr, and ggplot, so I didn't find much here that I was not familiar with. About the book, I'm not sure if it uses the best practice for getting people started with R; It seems to be written for someone who has never touched R or any kind of coding/scripting before, and still it completely skips the very very basics of understanding how R works and instead has the user jump straight into using R studio and installing tidyverse, something I think might create a lot of confusion. Hopefully others attending this course have some experience with R on beforehand. 
+
+
+
 
 ```{r}
 # This is a so-called "R chunk" where you can write R code.
@@ -9,5 +21,5 @@
 date()
 
 ```
-The text continues here.
 
+The text continues here.

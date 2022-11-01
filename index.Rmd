@@ -1,5 +1,6 @@
 ---
 title: "IODS course project"
+author: "Eirik R. Åsheim"
 output:
   html_document:
     theme: cosmo
