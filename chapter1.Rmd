@@ -1,4 +1,4 @@
-# About the project
+### About the project
 
 This is my (Hi, I'm Eirik) project page for course work related to the *PHD-302 Introduction to Open Data Science* course hosted at University of Helsinki, autumn 2022.
 
