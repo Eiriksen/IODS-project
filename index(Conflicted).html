@@ -389,13 +389,12 @@ Analysis of the Learning 2014 dataset</a>
 Load, explore, explain</a></li>
 <li><a href="#graphical-overview-summary-and-comments" id="toc-graphical-overview-summary-and-comments">2) Graphical overview,
 summary and comments</a></li>
-<li><a href="#fitting-a-regression-model-summary-and-comment-statistical-tests" id="toc-fitting-a-regression-model-summary-and-comment-statistical-tests">3)
-Fitting a regression model, summary, and comment statistical
-tests</a></li>
-<li><a href="#summary-of-simplified-model-explain-relationship-explain-multuple-r-squared" id="toc-summary-of-simplified-model-explain-relationship-explain-multuple-r-squared">4)
+<li><a href="#fitting-a-regression-model-summary-and-comment-statistical-tests" id="toc-fitting-a-regression-model-summary-and-comment-statistical-tests">Fitting
+a regression model, summary, and comment statistical tests</a></li>
+<li><a href="#summary-of-simplified-model-explain-relationship-explain-multuple-r-squared" id="toc-summary-of-simplified-model-explain-relationship-explain-multuple-r-squared">3)
 Summary of simplified model, explain relationship, explain multuple
 R-squared</a></li>
-<li><a href="#diagnostic-plots" id="toc-diagnostic-plots">5) Diagnostic
+<li><a href="#diagnostic-plots" id="toc-diagnostic-plots">4) Diagnostic
 plots</a></li>
 </ul></li>
 </ul>
@@ -539,7 +538,7 @@ also seems to correlate negatively with deep learning and strategic
 learning, as well as correlating negatively with attitude.</p>
 </div>
 <div id="fitting-a-regression-model-summary-and-comment-statistical-tests" class="section level2">
-<h2>3) Fitting a regression model, summary, and comment statistical
+<h2>Fitting a regression model, summary, and comment statistical
 tests</h2>
 <p>Let’s fit a regression model to examine some of the patterns more
 closely. We’ll use the variables attidue, age, and gender</p>
@@ -580,7 +579,7 @@ variables:</p>
 <pre class="r"><code>model_simple &lt;- lm(points ~ attitude, data=tb_students)</code></pre>
 </div>
 <div id="summary-of-simplified-model-explain-relationship-explain-multuple-r-squared" class="section level2">
-<h2>4) Summary of simplified model, explain relationship, explain
+<h2>3) Summary of simplified model, explain relationship, explain
 multuple R-squared</h2>
 <pre class="r"><code>summary(model_simple)</code></pre>
 <pre><code>## 
@@ -609,7 +608,7 @@ is explaning 19% of the variation in the target variable exam
 points.</p>
 </div>
 <div id="diagnostic-plots" class="section level2">
-<h2>5) Diagnostic plots</h2>
+<h2>4) Diagnostic plots</h2>
 <p>A key assumption for a basic liner model is that the
 <em>residuals</em> of the observed variable (points) are normally
 distributed</p>
