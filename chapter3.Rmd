@@ -1,0 +1,180 @@
+# Chapter 3. Analysis of the Learning 2014 dataset
+
+## 2: Read and describe data
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(glue)
+tb_alc <- read_delim("data/data-alc.txt")
+print(names(tb_alc))
+
+```
+
+The dataset is a product of questionaires handed to students of two Portuguese schools as well as course outcomes for two courses (math and portuguese), G1 G2 and G3 refers to the grades in the first period, second period, and final grade. The values G1,G2,G3, failures and absences are in this set the average of the scores for the two courses (for each student). The questionaire questions relate to demographic, social, and school related data. A full description of each variable and the dataset is available from [this link](https://archive.ics.uci.edu/ml/datasets/Student+Performance) Of special interest in this analysis is the values Walc and Dalc, which are scores from 1 (low) to 5 (very high) representing alcohol usage in the weekend (Walc) and in workdays (Dalc)
+
+In this dataset we have also defined a two new variables: alc_use (the average of Walc and Dalc), and high_use (whether alc_use is higher than 2 or not)
+
+## 3: Hypothesis on relationship to alcohol use
+
+Looking at different variables I think will have some relationship with high alcohol use.
+
+**go out (negative correlation)** This variable represent how much students go out with friends. Now, this might fail miserably, but my hypothesis is that the students who often go out with friends have a lower chance of being high-alcohol users; They might drink some when they are out with freinds, but going out with friends often might also correlate with a stronger social network which can be protective against high alcoholism. Hypothesis: lower high_use with higher goout
+
+**sex (some correlation)** A lot of traits and social aspect differ by sex in humans (either by culture or biology), so I'll hypothesise that number of high-alcohol users is going to be **different** for the two sexes (Not hypothesising about the direction of the relationship)
+
+**study time (negative correlation)** My guess is that high alcohol use is symptomatic of other problems in a persons life, students in an overall bad situation might have a higher alcohol usage, and also have less focus on studying. My hypothesis is thus that a lot of study time gives a lower change of high alcohol use.
+
+**famrel (negative correlation)** Going by the same argument as above. Family relations are important, and students with bad family relations might seek relief in alchol usage. My hypothesis is that bad family relations increase the probability of high alcohol use.
+
+## 4: Exploring these relations
+
+One way to explore these data is to plot the proportion of high alcohol users for different levels of our variables in question (goout, sex, studytime, and famrel).
+
+However, by only looking at the proportion, we're missing out on some important data: How many students there are in each category. This can tell us the strengt of the different values.
+
+To solve this, we'll make plots showing both the proportion of high alcohol users for different levels of our variables, but also plot the distribution (histogram) of our variable in question.
+
+To make this process a little cleaner, we'll make a general function for making this plot (based on the variable in question "var")
+
+```{r message=FALSE, warning=FALSE}
+
+# Set up a general function to make these plots
+
+makeplot <- function(var){
+  # Make a table where each row is one value of our explanatory variable...
+  # ... and the column "p_high_use" says the proportion of high alcohol users...
+  # ... there are in this this group
+  tb_alc_grouped <- 
+    tb_alc %>%
+    group_by(!!var) %>%
+    summarise(p_high_use=sum(high_use)/n())
+  
+  # find the max y value for the histogram we're gong to be plotting,
+  # We'll use that as a scaling factor for the second y axis of the plot
+  ymax <- tb_alc %>% group_by(!!var) %>% summarise(n=n()) %>% pull(n) %>% max()
+  scale = ymax
+  
+  # make the plot, drawing both the histogram of our variable in question (x), as well as a line showing the 
+  # - proportion of high alcohol users in for each value of x
+  ggplot()+
+    labs(title=glue("Distribution (bars) of {as.character(var)[2]} and the proportion (line) of \n high alcohol users in each category"))+
+    geom_histogram(data=tb_alc,aes(x=!!var), stat="count")+
+    geom_point(data=tb_alc_grouped,aes(x=!!var, y=p_high_use*scale),col="red",size=3)+
+    scale_y_continuous(
+      name = "N (bars)", sec.axis = sec_axis(~./(scale/100), name="% High alcohol use (line)")
+    )
+}
+
+```
+
+Then we can make the plots:
+
+```{r message=FALSE, warning=FALSE}
+makeplot(quo(goout))
+```
+
+This plot seems to go against my initial hypothesis. It seems like there's a higher proportion of high alcohol users among those who go out a lot. There is quite a bit fewer students going out a lot than those going out a lot (4-5) than those going out less (1-3), but probably not few enough to drive any extreme relationships; also the pattern is quite strong. Based on this graph I'm guessing my hypothesis was not right, but let's see what the analysis says later.
+
+```{r message=FALSE, warning=FALSE}
+makeplot(quo(sex))
+```
+
+This plot seems to be in line with my hypothesis that the number of high alcohol users would be different between the sexes. It looks like there more high alcohol users among the male students than among the female students. There are slightly more female students than male students, but the different is not large.
+
+```{r message=FALSE, warning=FALSE}
+makeplot(quo(studytime))
+```
+
+This also seems to go with my hypothesis that students who spend a lot of time studying also have low frequencies of high alcohol use. There is also relatively few students who study a lot.
+
+```{r message=FALSE, warning=FALSE}
+makeplot(quo(famrel))
+```
+
+This one is interesting, it seems like students with a poor family relations do have a higher incidence of high alcohol use, except for when the family relations are **really** poor (famrel=1). **However**, note that the sample sizes for Famrel \< 3 is also very low, so it is possible that the small sample sizes are driving more extreme (or "random") values for incidence of high alcohol use. I would therefore be a little sceptical of drawing conclusions from this graph.
+
+## 5: logistc regression
+
+We'll start by fitting a generalized linear model using our variables and a logit link function (family="binomial"). Then also printing out the summary of the model
+
+```{R message=FALSE, warning=FALSE}
+model = glm( high_use ~ goout + sex + studytime + famrel, family="binomial", data=tb_alc)
+```
+
+To get a better idea of the parameter estimates and their confidence intervals, we'll print those out after having done an exponential transformation on them (transforming log odds rations to odds ratios)
+
+```{R}
+exp(confint(model))
+summary(model)[12]$coefficients %>% as.data.frame() %>% mutate(Estimate=exp(Estimate), `Pr(>|z|)`=round(`Pr(>|z|)`,5))
+```
+
+It seems like all our selected variables associate significantly with high alcohol usage (at $\alpha=0.05$), since the p value for each variable is lower then 0.05
+
+Going through each variable:
+
+**Time spent going out**. This variable is associating positively (opposite of my hypothesis, oh well), so more time spent going out means higher probability of having a high alcohol usage. Specifically, for each point (from 1 to 5, from very low to very high ) on self reported time spent going out, the students have a 2.2 times [95% CI: 1.74-2.82] higher odds of having a high alcohol consumption.
+
+**Sex**. Male-identifying students have a 2.2 times [95% CI: 1.32-3.76] higher odds of having a high alcohol consumption compared to female-identifying students. Male students drink more than female students (supporting my hypothesis that male and female students have different levels of alcohol consumptions)
+
+**Studytime**. For each point (from 1 to 5, going from less than two hours to more than 10 hours) of self reported time spent studying, the students have a 0.62-fold [95% CI: 0.44-0.86] lower odds of having a high alcohol consumption. More study time = less alcohol (as hypothesised)
+
+**Family relationship**. For each point (from 1 to 5, going from very bad to excellent) of self reported family relationship, the students have a 0.66-fold [95% CI: 0.50-0.86] lower odds of having a high alcohol consumption. Better family relationships = less alcohol (as hypothesised)
+
+## 6: Cross tabulation
+
+```{r}
+# Creating the predictions
+tb_alc_pred <- 
+  tb_alc %>%
+  mutate(
+    probability = predict(model,type="response"),
+    prediction = rbinom(n=n(),1,probability)
+  )
+
+# Making the cross tabulation
+crosstab <- tb_alc_pred %>%
+  group_by(high_use) %>%
+  summarise(
+    n_wrong = sum(high_use!=prediction),
+    n_right = sum(high_use==prediction)
+  )
+
+# Calculating the percentage wrong predictions
+p_wrong = sum( tb_alc_pred$high_use != tb_alc_pred$prediction ) / nrow(tb_alc_pred) * 100
+    
+```
+
+`r knitr::kable(crosstab)`
+
+The table above shows us the cross tabulation of our predictions vs the training data. We can see that for students who did not have a high alcohol usage ("FALSE"), the model predicted 198 of them correct, and 61 wrong. For those with a high alcohol usage ("TRUE"), our model correctly predicted 48 right and 63 wrong. It seems like our model is thus more accurate for those who do not have a high alcohol usage. Going by our calculation above (p_wrong), the total percentage of incorrectly guessed students was `r round(p_wrong,2)`%.
+
+We can also plot this:
+
+```{R}
+# Plotting the predictions
+ggplot(tb_alc_pred)+
+  aes(x=probability,y=high_use,col=factor(prediction))+
+  geom_point(alpha=0.5)
+```
+
+The plot shows each student as one dot; The upper line is those with a high alcohol usage, and the lower line is those witout a high alcohol usage. **Red** points are those predicted to **not** have a high usage, and **blue** points are those predicted to **have** a high usage. The x-axis shows the estimated probability of high usage taken from the model.
+
+As for the comparison with a simple guessing strategy; I found the question unclear and decided not to spend time on it. Leaving this part blank here.
+
+## 7: Cross validation
+
+```{r}
+
+# Setting up the loss function (same as in the exercise)
+loss_func <- function(class, prob) {
+  n_wrong <- abs(class - prob) > 0.5
+  mean(n_wrong)
+}
+
+# Running a 10-fold cross validation
+library(boot)
+cv <- cv.glm(data = tb_alc, cost = loss_func, glmfit = model, K = 10)
+
+```
+
+Our cross validation tell us that our function had an error of `r cv$delta[1]`, which is actually better than the one used in the exercise. Looks like we already found a model with a better predictive accuracy. \`
