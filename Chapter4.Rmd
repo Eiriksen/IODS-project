@@ -1,0 +1,232 @@
+# Chapter 4 Boston data
+
+## 2) Load and explore
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(GGally)
+library(ggord)
+
+tb_boston <- MASS::Boston
+str(tb_boston)
+```
+In the **Boston** dataset, each row is one town/suburb (total N=506) of the city Boston, Massachutes.
+The dataset contains various demographic, area-use related, environmental and infrstracture data. [Full description](https://www.rdocumentation.org/packages/MASS/versions/7.3-58.1/topics/Boston).
+Some examples:
+- crim: Is the per capita crime rate in this area
+- nox: The nitrogen oxides concentrations (parts per 10 million)
+- rad: Index of accessibility to radial highways.
+- ptratio: Pupil-teacher ratio by town.
+etc...
+
+## 3 Graphical overview 
+
+```{r message=FALSE, warning=FALSE,  fig.width=10, fig.height=8}
+
+color_correlation <- function(data, mapping, method="p", use="pairwise", ...){
+    # Function by user20650 on Stackoverflow (https://stackoverflow.com/a/53685979)
+    # grab data
+    x <- eval_data_col(data, mapping$x)
+    y <- eval_data_col(data, mapping$y)
+
+    # calculate correlation
+    corr <- cor(x, y, method=method, use=use)
+
+    # calculate colour based on correlation value
+    # Here I have set a correlation of minus one to blue, 
+    # zero to white, and one to red 
+    # Change this to suit: possibly extend to add as an argument of `my_fn`
+    colFn <- colorRampPalette(c("blue", "white", "red"), interpolate ='spline')
+    fill <- colFn(100)[findInterval(corr, seq(-1, 1, length=100))]
+
+    ggally_cor(data = data, mapping = mapping, ...) + 
+      theme_void() +
+      theme(panel.background = element_rect(fill=fill))
+  }
+
+
+ggpairs(
+  data = tb_boston,
+  upper = list(continuous = color_correlation),
+  lower = list(continuous = wrap("points", alpha = 0.3, size=0.3)),
+)
+```
+
+That's an overwhelming amount of correlating data! It's almost easier to describe what's **not** correlating rather whan what is. I'm guessing that the data here must be a selection of some larger data set where only the most interesting/correlating data has been kept in. We can also see that very few of the variables follow simple normal distributions, often having multiple peacks, or being highle skewed either to the left or to the right.
+
+## 4) standardizing
+
+```{r message=FALSE, warning=FALSE,   fig.width=10, fig.height=8}
+
+# A function for randomizing the order of rows in a table
+randomize_rows <- function(tb){
+  return(
+   tb %>%
+     mutate( order=sample(row_number()) ) %>%
+     arrange(order) %>%
+     select(-order)
+  )
+}
+
+# Standardizing all variables, 
+# Turn crim into a categorical variable, divide by quantiles in ranges of 25%
+# - and randomize the order of the rows in the dataset before cutting it of into test- and training sets later
+tb_boston_st <- tb_boston %>% 
+  mutate_all( ~ scale(.)[,1]) %>%
+  mutate(
+    crim = cut(crim,quantile(crim, probs=c(0,0.25,0.5,0.75,1)),labels=c("low","med_low","med_high","high"),include.lowest=T)
+  ) %>% 
+  randomize_rows()
+
+cutoff_80 = round(nrow(tb_boston_st)*0.8)
+tb_boston_st_train = tb_boston_st[1:cutoff_80,]
+tb_boston_st_test =  tb_boston_st[(cutoff_80+1):nrow(tb_boston_st),]
+
+ggpairs(
+  data = tb_boston_st,
+  upper = list(continuous = color_correlation),
+  lower = list(continuous = wrap("points", alpha = 0.3, size=0.3)),
+)
+
+```
+
+After standardizing all the columns in the dataset, each variable is centered on zero, and its value is expressed in standard deviations. Because of this, it's not easy to see the changes visually in the figure above; the only place you can really see the change is by looking at the axis values.
+
+
+## 5) Linear discriminant analysis
+
+
+```{r}
+
+lindis <- MASS::lda(crim~.,tb_boston_st_train)
+
+print(lindis)
+```
+Here, the linear discriminant analysis has reduced our dataset down to three dimensions, LD1, LD2, and LD3, where most of the variance is explained by LD1.
+We can also plot our points against these dimensions:
+
+
+
+```{r}
+cols <- c("cadetblue1","green","lightgoldenrod","orange")
+ggord(lindis, tb_boston_st_train$crim, axes=c("1","2"), cols=cols )
+ggord(lindis, tb_boston_st_train$crim, axes=c("1","3"), cols=cols )
+ggord(lindis, tb_boston_st_train$crim, axes=c("2","3"), cols=cols )
+
+```
+
+
+In terms of studing the crime in the area, it seems like the firt linear dimension LD1 is the most interesting one, as it is the only one really separating the high-crime areas from the areas with lower crimes. It also seems like the variable "rad" is the one strongest associating with LD1, does a high access to highways associate with high crime rates?
+
+Maybe living areas close to the highways are less desirable, and so high-resource residents live further away from highways, and that this demographic associates with lower crime.
+
+
+
+## 6) Prediction
+
+```{r}
+# Making predictions
+crim_predicted <- predict(lindis, newdata = tb_boston_st_test %>% select(-crim))
+
+# Creating a cross tabulation
+table(correct = tb_boston_st_test$crim, predicted = crim_predicted$class)
+
+```
+
+Seems like our model got a few correct predicted (diagonal values). But what's the percent correct guessed?
+
+```{r message=FALSE, warning=FALSE}
+# Create alternative cross tabulation
+tb_boston_st_test %>%
+  mutate(
+    predicted = crim_predicted$class
+  ) %>%
+  group_by(crim) %>%
+  summarise(n=n(), n_pred_correct=sum(crim==predicted), p_pred_correct = n_pred_correct/n*100)
+
+```
+So, our model got about ~50% correct guesses for the categories low-med-high, but then quite a lot right for the high-crime areas! (94% correct)
+
+
+## 7) Distances and clusters
+
+
+```{r message=FALSE, warning=FALSE, fig.width = 10}
+dist_eu = dist(tb_boston_st, method="euclidean")
+summary(dist_eu)
+```
+The median euclidian distnace is 4.9, and the max distance is 13
+
+
+Next, let's try clustering our data. First, we'll figure out what number of clusters are sensible to use. In the code below, we compare the total within-cluster sum of squares for different numbers of cluster. However, as an additional detail, I've done the same calculations 10 times over and then taken the mean for each choice of cluster number; This reduces the random variation in the graph and smoothens the curve a bit.
+
+```{r message=FALSE, warning=FALSE, fig.width = 5}
+v_clusters = rep(1:15,10)
+v_wcss <- sapply(v_clusters, function(k){kmeans(tb_boston %>% mutate_all(~scale(.)[,1]), k)$tot.withinss})
+tb_kmeans <- data.frame(clusters = v_clusters, wcss=v_wcss) %>%
+  group_by(clusters) %>%
+  summarise(wcss=mean(wcss))
+            
+ggplot(tb_kmeans)+aes(x=clusters,y=wcss)+geom_point()
+```
+
+Seems like our biggest fall in total within-cluster sum of squares is when going from 1 to 2 clusters; The following additions of clusters still improve the sum of squares, but not nearly as much.
+
+Let's group our data by two clusters and show these clusters on the original graphical summary:
+
+```{r message=FALSE, warning=FALSE,  fig.width=10, fig.height=8}
+kmeans = kmeans(tb_boston %>% mutate_all(~scale(.)[,1]), 2)
+
+tb_boston_kmeans <- tb_boston %>% 
+  mutate_all(~scale(.)[,1]) %>%
+  mutate(cluster=kmeans$cluster) 
+
+ggpairs(
+  data = tb_boston_kmeans,
+  lower = list(continuous = wrap("points", alpha = 0.3, size=0.3), mapping=aes(color=factor(cluster))),
+)
+```
+
+Here we can see visually which points belong to the two clusters, blue and red.
+What do to the clusters associate with? It seems like Blue associates with...
+- Higher-than-low crime rates
+- Low amounts of residential land zoned for lots over 25,000 sq ft (few large properties?)
+- High amounts of industry
+- High concentrations of nitrogen oxides
+- Somewhat lower amounts of rooms pr dwelling
+- More older buildings
+- Closer distance to employment centres
+- Higher accesibility of highways
+- Higher tax rate (full-value property-tax rate)
+- Lower proportion of blacks
+- Higher proportion of lower-status residents
+- Lower value of homes
+
+Thus, one way to interpret this, is that the areas in boston can be divided into two clusters; one "high-value" cluster with low crime rates, expensive homes, nice air quality, low amounts of industry and so on; and then one "low-value" cluster with higher crime rates, less expensive homes but lower air quality and higher amounts of industry. 
+
+## Bonus
+
+Finally, lets try separating the dataset into 3 clusters, and then running a LDA analysis on it
+
+```{r message=FALSE, warning=FALSE,  fig.width=10, fig.height=8}
+set.seed(123)
+kmeans = kmeans(tb_boston %>% mutate_all(~scale(.)[,1]), 3)
+
+tb_boston_kmeans_3 <- tb_boston %>% 
+  mutate_all(~scale(.)[,1]) %>%
+  mutate(cluster=kmeans$cluster) 
+
+lindis_clustered <- MASS::lda(cluster~.,tb_boston_kmeans_3)
+
+lindis_clustered
+```
+Here we can see that the linear discriminant analysis separataed our data into two dimensions, where LD1 is the most important one.
+The most important variables within LD1 seem to be rad (-1.96), tax (-1.11) and indus (-0.32).
+
+Let's have a look at this graphically:
+
+```{r}
+ggord(lindis_clustered, factor(tb_boston_kmeans_3$cluster))
+```
+This shows us more or less the same. Especially cluster 1 seems to separate nicely in the LDA analysis, with taxation and and access to highways being the variables mostly separating these areas from the other ones. 
+
