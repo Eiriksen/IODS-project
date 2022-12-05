@@ -1,0 +1,229 @@
+---
+editor_options: 
+  markdown: 
+    wrap: sentence
+---
+
+# Chapter 5 HDI data and Principal component analysis.
+
+## 1) Data overview
+
+> 1: Show a graphical overview of the data and show summaries of the variables in the data.
+> Describe and interpret the outputs, commenting on the distributions of the variables and the relationships between them.
+> (0-3 points)
+
+```{r message=FALSE, warning=FALSE,}
+library(tidyverse)
+library(GGally)
+library(ggfortify)
+tb_human <- read_delim("data/data-human-v2.txt",)
+
+# Note: Here, I'm using a version of the human dataset without countries as row names.
+
+
+color_correlation <- function(data, mapping, method="p", use="pairwise", ...){
+    # Function by user20650 on Stackoverflow (https://stackoverflow.com/a/53685979)
+    # for ggpairs function, adding color by correlation  
+    # grab data
+    x <- eval_data_col(data, mapping$x)
+    y <- eval_data_col(data, mapping$y)
+
+    # calculate correlation
+    corr <- cor(x, y, method=method, use=use)
+
+    # calculate colour based on correlation value
+    # Here I have set a correlation of minus one to blue, 
+    # zero to white, and one to red 
+    # Change this to suit: possibly extend to add as an argument of `my_fn`
+    colFn <- colorRampPalette(c("blue", "white", "red"), interpolate ='spline')
+    fill <- colFn(100)[findInterval(corr, seq(-1, 1, length=100))]
+
+    ggally_cor(data = data, mapping = mapping, ...) + 
+      theme_void() +
+      theme(panel.background = element_rect(fill=fill))
+  }
+
+
+tb_human %>%  
+ select(-Country) %>%
+ pivot_longer(everything()) %>% 
+ group_by(name) %>% 
+ summarise(mean=round(mean(value),2), sd=round(sd(value),2))
+
+ggpairs(
+  # Adjusting GNI to be expressed in thousands, to make graph more easy to read
+  data = tb_human %>% mutate(GNI = GNI / 1000) %>% rename(GNI_K=GNI) %>% select(-Country),
+  # Coloring by correlation
+  upper = list(continuous = color_correlation),
+  lower = list(continuous = wrap("points", alpha = 0.3, size=0.3)),
+) + 
+  theme(axis.text = element_text(size=5))
+
+
+
+```
+
+**Summaries of the different variables:**
+
+-   **Edu2.FM:** The mean ratio of female-to-male having at least some secondary education is 0.85, indicating that for most countries there are more male individuals with secondary eduction than female.
+    There's quite a lot of spread here, with many countries having even more male-favoring education systems, some very few countries having female-favoring system, and then quite a few countries having an equal amount of male- and female individuals having secondary eduction.
+
+-   **Labo.FM**: Very few (maybe 4) countries have a female-biased workforce; most countries are strongly male-biased (mean ratio is 0.75), and there are quite a few countries with very low female participation in the workforce.
+
+-   **Edu.Exp:** The average expected time of education is 13.18 years, though this variable is fairly bell-shaped with some countries having higher and lower average time spans (SD=2.84 years)
+
+-   **Life.Exp:** Average life expectancy is 71.6 years, with a left-skewed distributions (more countries with long lifespans than low lifespan).
+    However, there are some countries with very low expected lifespans, going down to some \~50 years.
+
+-   **GNI:** The average national income (per capita) is 17 627.90.
+    The distriubtion here is strongly right-skewed, meaning there are some countries with vastly higher income (up to some \~125 000 pr capita)
+
+-   **Mat.Mor:** THe mean rate of maternal mortality is at 149 deaths pr 100 000 births, but the distribution is here highly right skewed, meaning some countires have a much higher maternal mortality rate (up to almost 1000 deaths pr 100 000 births).
+
+-   **Ado.Birth:** The mean rate of births among adolescents is 47.16 births pr 1000 women ages 15-19.
+    This measure is also fairly right skewed, with many countries having higher rates of births among adolescents (up to 200 pr 1000)
+
+-   **Parli.f:** The average share of seats in parliaments held by females is at some 20%.
+    This relationship is \# select(-Country) %\>% some countries having 0%- , and some countries having up to 60% of parliament seats held by female politiciants (SD = 11.5%)
+
+**Notable correlations:**
+
+-   There is a positive correlation between expected years of eduction, F/M ratio for higher education, life expectancy and GNI.
+    People living in high-income countries have longer exptected educations, more women in higher education and longer life-expectancy.
+
+-   On the other hand, rates of maternal mortality and births among adolescents correlate negatively to these measures.
+
+-   Finally, the amount of females in parliament, and the share of females in the workforce don't correlate strongly with any of these variables.
+    The correaltions it does have, however, are somewhat counterintuitive; Countries with a high amount of females in the workforce also have a higher maternal mortality.
+
+## 2) PCA
+
+> 2: Perform principal component analysis (PCA) on the raw (non-standardized) human data.
+> Show the variability captured by the principal components.
+> Draw a biplot displaying the observations by the first two principal components (PC1 coordinate in x-axis, PC2 coordinate in y-axis), along with arrows representing the original variables.
+> (0-2 points)
+
+First, running the PCA analysis and printing out the principal components:
+
+```{r messages=FALSE}
+# Running PCA
+pca_human <- prcomp(tb_human %>% select(-Country))
+pca_human
+```
+
+Let's look at how much variation is explained by different components:
+
+```{r messages=FALSE}
+# Displaying variability captured by different principal components
+summary(pca_human)
+```
+
+Note how PC1 seems to capture most of the variance, and that GNI seems to be the most important value in PC1
+
+Let's draw the biplot:
+
+```{r messages=FALSE}
+autoplot(pca_human, data = tb_human, loadings.label = TRUE, loadings.label.size = 3)
+```
+
+PCA biplot of HDI data (unstandardized).
+The plot seems to indicate that most of the variation in our dataset can be captured by principal component 1, which is strongly associated with the gross national income par capita.
+Principal component 2 is far less importan (explains 0.01% of the variation); here maternal mortality rates is the most strongly associated variable.
+
+Interesting; we'll discuss more below.
+
+## 3) PCA post standardizing
+
+> 3: Standardize the variables in the human data and repeat the above analysis.
+> Interpret the results of both analysis (with and without standardizing).
+> Are the results different?
+> Why or why not?
+> Include captions (brief descriptions) in your plots where you describe the results by using not just your variable names, but the actual phenomena they relate to.
+> (0-4 points)
+
+```{r messages=FALSE}
+tb_human_st <- 
+  tb_human %>% 
+  mutate_at(vars(-"Country"), 
+    ~ scale(.)[,1]
+    )
+
+pca_human_st <- prcomp(tb_human_st %>% select(-Country))
+pca_human_st
+```
+
+```{r messages=FALSE}
+summary(pca_human_st)
+```
+
+Now this changes things!
+PC1 is still the most important, but not by far as much as previously.
+
+```{r messages=FALSE}
+autoplot(pca_human_st, x=1,y=2, data = tb_human, loadings.label = TRUE, loadings.label.size = 3)
+```
+
+biplot of HDI data (standarized).
+Here, the data is separating into two axes: PC1 (explains the most variation at 53.6%) relates to variables related mainly to economic- and health care development (such as life expectancy, gross national income per capita, expected number of years in eduction, maternal mortality rates, adolescent birth rates, but also proportion in females in higher education).
+The other (PC2) explains less variation (16.24%) axis relates female participation in politics and in the workforce.
+
+The results are obviously very differently.
+The reason for this is that the variables are now expressed in relation to their own variation, not their absolute size.
+Previously, GNI was the most important variable partly because it also held the largest values and the most variation (same goes for maternal mortality), after adjusting it so that it is expressed in standard deviations, it is analysed on the same basis as the other variables.
+Thus, after standardizing, we're analysing the dataset based on the **relative** variation in the selected variables, not the absolute variation.
+
+## 4) Interpretations
+
+> 4: Give your personal interpretations of the first two principal component dimensions based on the biplot drawn after PCA on the standardized human data.
+> (0-2 points)
+
+We can see that the data is divided on mainly two axes: PC1 seem to include variables related to overall economic and health-care development such as GNI, life expectancy, maternal mortality rates, and adolescent birth rates.
+The other axis seems to contain values related to female participation in the workforce and in politics.
+It is interesting to note that these two axis separate quite strongly, almost as if economic development and gender equality in the workforce and in politics is separated.
+On that note, it is also interesting that gender equality in education is one the same axis as economic development (PC1), but not on the "gender-participation" axis (PC2)
+
+## 5) Tea data
+
+> 5: The tea data comes from the FactoMineR package and it is measured with a questionnaire on tea: 300 individuals were asked how they drink tea (18 questions) and what are their product's perception (12 questions).
+> In addition, some personal details were asked (4 questions).
+> Explore the data briefly: look at the structure and the dimensions of the data.
+> Use View(tea) to browse its contents, and visualize the data.
+> Use Multiple Correspondence Analysis (MCA) on the tea data (or on just certain columns of the data, it is up to you!).
+> Interpret the results of the MCA and draw at least the variable biplot of the analysis.
+> You can also explore other plotting options for MCA.
+> Comment on the output of the plots.
+> (0-4 points)
+
+```{r messages=FALSE}
+library(FactoMineR)
+tb_tea <- read.csv("https://raw.githubusercontent.com/KimmoVehkalahti/Helsinki-Open-Data-Science/master/datasets/tea.csv", stringsAsFactors = TRUE)
+
+```
+
+The dataset countains 300 observations (people), with columns representing how they answered various questions.
+Almost all variables are factors with fairly few levels, often only two.
+Age is the only variable expressed as a number.
+The datasets seems to contain data about how people drink their tea, how often, and then with some question about personal details, and about how they feel about tea drinking.
+
+For the multiple correspondent analysis, we're only going to look at the first 19 columns as they seem to be the most important ones for traits related to tea drinking in itself.
+
+```{r messages=FALSE, fig.width=10, fig.height=8}
+
+
+
+mca_tea<-  FactoMineR::MCA(tb_tea, quanti.sup=19, quali.sup=c(20:36), graph=FALSE)
+
+
+# visualize MCA
+plot(mca_tea, invisible=c("ind","quali.sup","quanti.sup"), graph.type = "classic",cex=0.7)
+plot(mca_tea, invisible=c("var","quali.sup","quanti.sup"), graph.type = "classic",cex=0.7)
+
+```
+
+The *first* plot shows us how different answers relate to the two main principal component, while the *second* plot shows us where different individuals fall on these two dimensions.
+We can see that the populations is fairly homogeneous, there aren't any obvious groupings among the respondents.
+On the first graph, we can try to make sense of what the two dimensions associate with.
+On the **upper extreme** of Dim 1 we see answers such as "tearoom", "chainstore+teashop", "tea bag+unpackaged", "always", "pub", "lunch", and "work", while on the **lower extreme** we have answers like "not.tea time", "not work", "p_cheap", "not.home", "not.tearoom" etc.
+One way to interpret this is that dimension one separates frequent tea drinkers from those drinking tea rarely.
+The second dimension could relate to buying patterns of tea.
+Those on the higher end of Dim 2 like to buy more expensive, unpackaged teas from specialiced tea shops, while those on the lower end buy their teas from chain stores, use tea bags, have milk in their tea, and drink Earl Grey.

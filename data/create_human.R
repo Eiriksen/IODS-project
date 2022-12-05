@@ -1,5 +1,5 @@
 # R script for wrangling the human development and gender inequality datasets
-# Eirik R. Åsheim 
+# Eirik R. ?sheim 
 # 2022 November 25
 
 
@@ -27,7 +27,7 @@ tb_hd_edit <-
    "HDI.rank" = "HDI Rank",
    "HDI" = "Human Development Index (HDI)",
    "Life.Exp" = "Life Expectancy at Birth",
-   "Edu.exp" = "Expected Years of Education",
+   "Edu.Exp" = "Expected Years of Education",
    "Edu.mean" = "Mean Years of Education",
    "GNI" = "Gross National Income (GNI) per Capita",
    "GNI.subHDI" = "GNI per Capita Rank Minus HDI Rank"
@@ -38,18 +38,18 @@ tb_gii_edit <-
   rename(
    "GII.rank" =  "GII Rank",
    "GII" =  "Gender Inequality Index (GII)",
-   "M.Mort.ratio" =  "Maternal Mortality Ratio",
-   "A.Birth.rate" =  "Adolescent Birth Rate",
-   "Pres.Parl.perc" =  "Percent Representation in Parliament",
-   "Sec.Edu.F" =  "Population with Secondary Education (Female)",
-   "Sec.Edu.M" =  "Population with Secondary Education (Male)",
-   "Lab.part.F" =  "Labour Force Participation Rate (Female)",
-   "Lab.part.M" =  "Labour Force Participation Rate (Male)",
+   "Mat.Mor" =  "Maternal Mortality Ratio",
+   "Ado.Birth" =  "Adolescent Birth Rate",
+   "Parli.F" =  "Percent Representation in Parliament",
+   "Edu2.F" =  "Population with Secondary Education (Female)",
+   "Edu2.M" =  "Population with Secondary Education (Male)",
+   "Labo.F" =  "Labour Force Participation Rate (Female)",
+   "Labo.M" =  "Labour Force Participation Rate (Male)",
   ) %>%
 # 6)
   mutate(
-    Lab.part.FM = Sec.Edu.F/Sec.Edu.M,
-    Sec.edu.FM = Lab.part.F/Lab.part.M,
+    Labo.FM = Labo.F / Labo.M,
+    Edu2.FM = Edu2.F / Edu2.M
   )
 
 
