@@ -1,0 +1,281 @@
+# Assignment 6. Analysis of longitudinal data
+
+## 1) Analysis of RATS data via summary statistics
+
+The RATS data set contain data from 16 subjects (rats), which were measured over 11 days during a 9 week long experiment. The rats were divided among 3 feeding treatments, and we're looking to see if there is a difference in **growth rate between the treatments.**
+
+First, loading in the data (long form):
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+
+tb_RATS <- read_delim(
+  file = "data/data-rats.txt",
+  col_types = list(ID = col_factor(), Group = col_factor())
+  )
+
+
+```
+
+### Graphical overviews
+
+```{r message=FALSE, warning=FALSE, fig.show="hold", out.width="50%"}
+tb_RATS %>% 
+  ggplot()+
+  aes(x=day, y=weight, label=ID, col=Group)+
+  geom_text()+
+  labs(title="A) Weight of rats over the study time period", subtitle = "Colors:groups, Numbers: individual ID")
+
+tb_RATS %>% 
+  ggplot()+
+  aes(x=day, y=weight, col=ID, facet=Group)+
+  geom_line(size=1,alpha=0.6)+
+  facet_wrap(~Group) +
+  labs(title="B) Weight of rats over the study time period", subtitle = "Facets indicate groups 1-3, each line is one rat")
+
+
+tb_RATS %>%
+  ggplot()+
+  aes(x=day,y=weight,col=Group, shape=Group)+
+  stat_summary(fun.data=mean_se, geom="errorbar", position = position_dodge(2), width=3,size=0.9)+
+  stat_summary(fun=mean, geom="line", position = position_dodge(2), size=1, alpha=0.2)+
+  stat_summary(fun=mean, geom="point", position = position_dodge(2), size=3)+
+  labs(title="C) Mean weight (±SE)of rats in each group (1-3) over the study time period", 
+       subtitle = "Points are dodged slightly to avoid overlap",
+       y="Mean weight (±SE)")
+
+```
+
+Here I've use a few different plotting approaches to look at how the weight of the subjects (rats) change over the study period.
+
+-   **A)** Looks a little messy, here each weight of each individual is plotted against time, and the individuals are identified by the numerical ID. This gives us an idea of what the data looks like, but it's hard to separate some individuals.
+
+-   **B)** Here, I've used line plots to connect the measurements of the different individuals so we an more easily see the changes over time. The three facets (subplots) are fore the tree feed groups. We can clearly see there is some difference between the groups, we can track each individual, and we can see that in group 2 there is one individual that is much larger than the others in that group.
+
+-   **C)** Here, we're using summarized data for each day and treatment. We can see the mean weight of each group for each measurement day, with the standard errors to gives us an idea of how different the groups are. However, here, we're hiding the original datapoints, but showing them would also make the plot very messy. In any case, we can see that the weights are increasing over time in all the groups. However, it's hard to tell if there is a **difference in growth rate,** which is what we're interested in finding out from this data.
+
+### Grouped summaries and plots
+
+```{r message=FALSE, warning=FALSE, fig.show="hold",out.width="50%"}
+tb_RATS %>% 
+  ggplot()+
+  aes(x=Group, y=weight)+
+  geom_boxplot()+
+  labs(title="A) Mean weights of rats in each treatment group, for the entire study period")
+
+tb_RATS %>% 
+  ggplot()+
+  aes(x=Group, y=weight)+
+  geom_violin(alpha=0.3)+
+  geom_jitter(aes(col=ID))+
+  labs(title="B) Distributions of weights of rats in each treatment group (violins)",
+       subtitle="Points indicate single measures of individuals, colors indicate individual")
+
+
+
+```
+
+Here are some more summary plots, similar to those used in Chapter 8 of the MABS plot. Each plot simply shows the average weight recorded in all treatments (over the entire study period). **These plots really are not that useful for figuring out if there is a difference in growth rate between the treatments, but they do show the absolute weight differences.**
+
+One interesting thing to note: In plot A it looks like we have some outliers (group 2). I decided to investigate this further and made an alternative plot which shows the original data points (with violin graphs in the background showing the distribution of the points), and here we can see that while there are some points which look like outliers *when looked at together,* we can see that within that individual they are really not outliers but fall within a reasonable range for the purple individual in group 2. I think this underscores the importance of account for individual ID when working with these kind of data. Another way to make this plot would be to not use every single data point from each individual but instead use their mean weight over the study as a data point. -still, that's throwing away good data!
+
+### An attempt to do a decent summary of growth
+
+```{r message=FALSE, warning=FALSE, fig.show="hold",}
+
+tb_RATS %>%
+  group_by(ID,Group) %>%
+  summarise(slope = lm(weight~day)$coefficients[2]) %>%
+  ggplot()+
+  aes(x=Group,y=slope)+
+  geom_violin(alpha=0.5, color=NA, fill="gray")+
+  geom_jitter(width=0.1,height=0)+
+  stat_summary(fun.data=mean_se, geom="errorbar",width=0.3,size=1,alpha=0.3)+
+  stat_summary(fun=mean, geom="point",size=5,alpha=0.3)+
+  labs(
+    title="Difference in weight gain for different groups of rats",
+    subtitle="Large points and errorbars indicate group means ± SE",
+    y="Estimated weight gain (g/day)"
+  )
+
+           
+```
+
+The previous graphs were not very usefull for telling if there is a difference in growth rate between the groups. We need some measure of growth rate. One way to do this could have been to take the difference between the first and last data point and then use that value for growth rate -- but then we'd be throwing away all the data between the first and last point; not very exciting.
+
+Really the way to do this would be to use a linear mixed effect model, but I'm not supposed to in this part of the assignment so I cam up with another "hacky" solution. In the graph above, I have for each individual done a small linear model on their growth data and then extracted the slope from that model. Thus, each data point in the graph above is the "slope" for each individual. Then, in the graph above, we can compare the slopes between the three groups by looking at the means and the standard errors (though I've also plotted the original data points and the distributions). **What we see is that group 1 definitively looks to have a lower growth rate then group 2 and 3, but I wouldn't be so sure about the difference between group 2 and 3.**
+
+Keep in mind that this is not really a good solution though, because we're essentially doing analysis on parameters (the slopes we calculated); having calculated the means and stander errors of these, we're essentially calculating parameters of parameters! We'll most certainly be violating some assumptions when we put these slope-data into any statistical test.
+
+...so let's do that next!
+
+### Anova analysis
+
+```{r message=FALSE, warning=FALSE}
+
+model_fit <- 
+  tb_RATS %>%
+  group_by(ID,Group) %>%
+  summarise(slope = lm(weight~day)$coefficients[2]) %>%
+  lm(slope ~ Group, data=.) 
+
+anova(model_fit)
+
+```
+
+In chapter 8 of the MABS book, they do both a T test and an anova. However, we're dealing with three groups here (not two), so a T-test is out of the question. (we could do multiple t-tests, but then we'd also have to do multiple-test correction). Instead, I'm only doing an ANOVA analysis on the slopes I calculated. **What the summary tells us is that there is a significant difference in slopes associated with the groups, but it can't tell us which group is different from which.** This is about as far as we get without turning to proper linear mixed models.
+
+## 2) Analysis of BPRS data via mixed-effect models
+
+This data contains data for 40 subjects which were given BPRS scores (a psychological rating scale, indicating schizophrenia) over 8 weeks, and were put in one of two treatment groups.
+
+Loading in the data:
+
+```{r message=FALSE, warning=FALSE}
+
+library(lmerTest)
+
+tb_BPRS <- read_delim(
+  file = "data/data-BPRS.txt",
+  col_types = list(subject = col_factor(), treatment = col_factor())
+  )
+
+```
+
+### Graphical overview
+
+```{r message=FALSE, warning=FALSE, fig.show="hold",out.width="50%"}
+
+tb_BPRS %>% 
+  ggplot()+
+  aes(x=week, y=BPRS, col=subject, facet=treatment)+
+  geom_line()+
+  facet_wrap(~treatment)+
+  labs(title="A) BPRS scores of subject the study time period")
+
+tb_BPRS %>%
+  group_by(week) %>%
+  mutate(BPRS_scaled = scale(BPRS)) %>%
+  ggplot()+
+  aes(x=week, y=BPRS_scaled, col=subject, facet=treatment)+
+  geom_line()+
+  facet_wrap(~treatment)+
+  labs(title="B) scaled BPRS scores of subject the study time period")
+
+
+
+```
+
+The two plots above show us how BPRS scores of all the participating individuals developed over the 8 weeks. Plot B) is supposed to be easier to read because the variables are scaled (scaled for each week), but I honestly don't find that plot much more helpful than the first one. In any case **it seems that in both treatments the BPRS scores go down over time, but we can't really tell how much and if there is a difference between the groups.**
+
+To tell that, we'll need to do some modelling.
+
+### Fitting some models:
+
+Note: To save space, for the following summaries I'm only printing the model coefficients.
+
+As in MABS Ch9 I'll fit some linear models (and linear mixed models) of increasing complexity, and then I'll compare them in the end.
+
+First, fitting a completely **ordinary linear model**:
+
+```{r message=FALSE, warning=FALSE}
+
+mod_1_normal <- lm( BPRS ~ week + treatment, data=tb_BPRS)
+summary(mod_1_normal)$coefficients
+```
+
+According to this first model, the BPRS scores significantly go down for each week (by -2.27 points pr week), but the effect of the treatments is more uncertain (treatment 2 might have larger BPRS scores then treatment 1, but it is not a significant difference so we can't tell).
+
+Next, let's try fitting a **mixed effect (ME) model, letting subject ID act as a random effect on the intercept:**
+
+```{r message=FALSE, warning=FALSE}
+
+mod_2_rInt <- lmer( BPRS ~ week + treatment + (1|subject), data=tb_BPRS)
+summary(mod_2_rInt)$coefficients
+
+
+```
+
+Using this model gives us a very similar result. The significance of the effect of time increased, but we're still uncertain about the effect of treatment 2.
+
+Next: Increasing the complexity, same model as above but now **subjects have a random effect on the effect of time (week)** instead of a random effect on the intercept.
+
+```{r message=FALSE, warning=FALSE}
+mod_3_rInt_rSlope <- lmer( BPRS ~ week + treatment + (week|subject), data=tb_BPRS)
+summary(mod_3_rInt_rSlope)$coefficients
+```
+
+Still a similar result. The effect size of the treatment is higher now, yet still non-significant.
+
+Finally, same model as above, but **now with an interaction fitted between week and treatment**:
+
+```{r message=FALSE, warning=FALSE}
+mod_4_rInt_rSlope_intractn <- lmer( BPRS ~ week * treatment + (week|subject), data=tb_BPRS)
+summary(mod_4_rInt_rSlope_intractn)$coefficients
+```
+
+The effect of time (week) is still very similar here (and significant), but the treatment effect has changed a lot! Treatment 2 now gives a lower BPRS score (-2.29) than treatment. Also, the effect of time (week) now differs between the treatments; In treatment 1, subject go down in BPRS faster than in group 2. However, **both the treatment effect and the interaction is still non-significant** here.
+
+Let's compare the models using an ANOVA analysis:
+
+```{r message=FALSE, warning=FALSE}
+anova(
+  mod_2_rInt,
+  mod_3_rInt_rSlope,
+  mod_4_rInt_rSlope_intractn
+)
+```
+
+The analysis tells us that model 3 (including ID as a random effect on time, but not including the interaction) has the highest likelihood (-the probability of observing our data if this model was true), and significantly so. **This indicates model 3 could be the best model.**\
+\
+Let's also try doing some **cross validation** to compare the models. The following code splits the data set into two (even/odd subject IDs), fits each model separately to each data set (giving two fits), and uses the parameter from each fit to predict the data not used in the model. It then does this procedure for each model:
+
+```{r message=FALSE, warning=FALSE}
+set.seed(1337)
+library(cvms)
+# Cross validation (split based on batch number)
+cvms::cross_validate(
+  data = tb_BPRS %>% 
+    mutate(
+      id_numeric = as.numeric(substr(subject,2,4)),
+      .folds=factor(ifelse((id_numeric %% 2) == 0,yes=1,no=2))
+      ),
+  models = c(
+    "BPRS ~ week + treatment",
+    "BPRS ~ week + treatment + (1|subject)",
+    "BPRS ~ week + treatment + (week|subject)",
+    "BPRS ~ week * treatment + (week|subject)"
+    ),
+  family="gaussian",
+  REML=T
+  ) %>% select(Fixed,Random,RMSE,AICc)
+
+
+```
+
+The cross validation does not seem to quite agree with the ANOVA analysis, but it's close. The Residual Mean Square Error (RMSE, a measure of how close the predictions were to the observed data, smaller is better) is best for model 4; **so model 4 does marginally better on cross validation**. The ICC (not related to cross validation, but a measure of model fit compensating for complexity) is also lower (better) for model 4. However, the difference is very very small.
+
+**The safest thing to conclude is probably that time in treatment had an effect on BPRS scores (both model 3 and 4 agrees on this), and that there may be a difference between the treatments in how the subjects develop over time, but this effect is somewhat uncertain (only model 4 gives us a significant week x treatment interaction).**
+
+Finally, let's plot the original data vs the predicted data from model 4:
+
+```{r message=FALSE, warning=FALSE}
+tb_BPRS$fitted = F
+
+tb_BPRS_fitted <- 
+  tb_BPRS %>% 
+  mutate(BPRS = fitted(mod_4_rInt_rSlope_intractn), fitted=T)
+
+
+ggplot(
+  bind_rows(tb_BPRS,tb_BPRS_fitted)
+  )+
+  aes(x=week,y=BPRS,col=subject,facet=fitted)+
+  geom_line()+
+  facet_wrap(~interaction(treatment,fitted))
+
+```
+
+The plot above shows the observed data for group 1 and 2 (top row), and the predicted data for the same groups (bottom row). The main observation here is that is that the predicted data looks fairly similar to the observed data, meaning our model is not completely off.
+
+Thanks for grading this assignment, and have a happy holidays!!!
